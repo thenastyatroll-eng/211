@@ -11,32 +11,19 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }
   
-  html, body { 
-    height: 100%; 
-    overflow-x: hidden;
-  }
+  html, body { height: 100%; overflow-x: hidden; }
   
   body { 
-    background: #f0f2f8; 
-    color: #2d2d3a; 
-    -webkit-text-size-adjust: 100%;
+    background: #f0f2f8; color: #2d2d3a; -webkit-text-size-adjust: 100%;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
   
   .container { 
-    width: 100%; 
-    max-width: 100vw;
-    min-height: 100vh;
-    min-height: 100dvh;
-    padding: 20px 40px; 
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
+    width: 100%; max-width: 100vw; min-height: 100vh; min-height: 100dvh;
+    padding: 20px 40px; display: flex; flex-direction: column; box-sizing: border-box;
   }
   
-  @media (max-width: 768px) { 
-    .container { padding: 15px 10px; } 
-  }
+  @media (max-width: 768px) { .container { padding: 15px 10px; } }
 
   .header-top { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 24px; flex-wrap: wrap; gap: 10px; }
   .header-top h1 { margin: 0; font-size: 24px; color: #4a4ae0; }
@@ -129,7 +116,6 @@
   .text-danger { color: #c03030; font-weight: bold; }
   .text-success { color: #2e7d32; font-weight: bold; }
 
-  /* Колонки категорий и истории */
   .fin-columns { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
   .fin-col { flex: 1 1 250px; background: #fff; min-width: 0; overflow-x: auto; }
   
@@ -434,6 +420,14 @@
         <input type="file" id="importJsonInput" accept=".json" style="display:none;">
       </label>
     </div>
+    
+    <!-- КНОПКА ОЧИСТКИ ВСЕХ ДАННЫХ -->
+    <h3 style="margin-top:20px; color:#c03030;">3. Опасная зона</h3>
+    <p style="font-size:13px;">Внимание: это действие навсегда удалит все задачи, финансы и привычки. Бэкап не создается автоматически!</p>
+    <div class="modal-btns" style="margin-top:0; margin-bottom:20px;">
+      <button id="clearAllDataBtn" class="add" style="background:#c03030; width:100%;">🗑️ Удалить все данные</button>
+    </div>
+
     <div class="modal-btns" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
       <button id="closeModalBtn" class="nav-btn" style="width:100%;">Закрыть</button>
     </div>
@@ -520,6 +514,16 @@ document.getElementById('importJsonInput').onchange = (e) => {
     } catch (err) { alert('Ошибка чтения файла.'); }
   };
   reader.readAsText(file);
+};
+
+// === ОЧИСТКА ВСЕХ ДАННЫХ ===
+document.getElementById('clearAllDataBtn').onclick = () => {
+  if (confirm('⚠️ Вы уверены, что хотите удалить ВСЕ данные без возможности восстановления?')) {
+    if (confirm('Точно удалить? Все задачи, финансы и привычки исчезнут.')) {
+      localStorage.clear(); // полностью очищаем хранилище
+      location.reload();    // перезагружаем страницу
+    }
+  }
 };
 
 // ===== ВКЛАДКИ =====
@@ -701,7 +705,19 @@ document.getElementById('habitForm').addEventListener('submit', e => {
 });
 
 // ===== ФИНАНСЫ =====
-let finance = load('finance');
+let finance = load('finance', []);
+
+// МИГРАЦИЯ СТАРЫХ ДАННЫХ
+let financeMigrated = false;
+finance = finance.map(f => {
+  if (!f.date) {
+    financeMigrated = true;
+    return { ...f, date: f.id, id: Date.now() + Math.random() };
+  }
+  return f;
+});
+if (financeMigrated) save('finance', finance);
+
 let currentFinDate = new Date(); 
 const CHART_COLORS = ['#4a4ae0', '#ff6b6b', '#f29b38', '#4caf50', '#9c27b0', '#00bcd4', '#e91e63', '#8bc34a', '#ff9800', '#607d8b', '#795548', '#ffc107', '#3f51b5', '#009688', '#ff5722', '#cddc39'];
 
@@ -716,7 +732,7 @@ function renderFinance() {
   document.getElementById('finMonthLabel').textContent = currentFinDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
   document.getElementById('yearlyTitle').textContent = 'Сводка за ' + selectedYear + ' год';
 
-  const monthFin = finance.filter(f => { const d = new Date(f.id); return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear; });
+  const monthFin = finance.filter(f => { const d = new Date(f.date); return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear; });
   let income = 0, expense = 0;
   const incCats = {}, expCats = {};
 
@@ -725,11 +741,11 @@ function renderFinance() {
     else { expense += f.amount; expCats[f.category] = (expCats[f.category] || 0) + f.amount; }
   });
 
-  // СПИСОК ИСТОРИИ (с датой)
+  // СПИСОК ИСТОРИИ
   const list = document.getElementById('finList'); list.innerHTML = '';
-  monthFin.sort((a, b) => b.id - a.id).forEach(f => {
+  monthFin.sort((a, b) => b.date - a.date).forEach(f => {
     const row = document.createElement('div'); row.className = 'item';
-    const d = new Date(f.id);
+    const d = new Date(f.date);
     const dateStr = String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0');
     
     row.innerHTML = 
@@ -786,7 +802,7 @@ function renderFinance() {
 
   const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
   const dailyExpenses = new Array(daysInMonth).fill(0);
-  monthFin.forEach(f => { if (f.type === 'expense') { dailyExpenses[new Date(f.id).getDate() - 1] += f.amount; } });
+  monthFin.forEach(f => { if (f.type === 'expense') { dailyExpenses[new Date(f.date).getDate() - 1] += f.amount; } });
   const maxDaily = Math.max(...dailyExpenses, 1);
   const dailyChartEl = document.getElementById('dailyChart'); dailyChartEl.innerHTML = '';
   for (let i = 0; i < daysInMonth; i++) {
@@ -800,7 +816,7 @@ function renderFinance() {
     wrap.appendChild(bar); dailyChartEl.appendChild(wrap);
   }
 
-  const prevDate = new Date(selectedYear, selectedMonth - 1, 1), prevMonthFin = finance.filter(f => { const d = new Date(f.id); return d.getMonth() === prevDate.getMonth() && d.getFullYear() === prevDate.getFullYear(); });
+  const prevDate = new Date(selectedYear, selectedMonth - 1, 1), prevMonthFin = finance.filter(f => { const d = new Date(f.date); return d.getMonth() === prevDate.getMonth() && d.getFullYear() === prevDate.getFullYear(); });
   let prevExpense = 0; prevMonthFin.forEach(f => { if (f.type === 'expense') prevExpense += f.amount; });
   const compEl = document.getElementById('comparisonText');
   if (!prevExpense && expense) compEl.innerHTML = `В прошлом месяце не было расходов. Потрачено: <b>${expense.toFixed(2)} ₽</b>.`;
@@ -811,7 +827,7 @@ function renderFinance() {
   } else compEl.innerHTML = `Нет данных для сравнения.`;
 
   // ГОДОВОЙ ОТЧЕТ
-  const yearFin = finance.filter(f => new Date(f.id).getFullYear() === selectedYear);
+  const yearFin = finance.filter(f => new Date(f.date).getFullYear() === selectedYear);
   const yearStats = {}; let yearTotalIncome = 0, yearTotalExpense = 0;
   yearFin.forEach(f => {
     if (!yearStats[f.category]) yearStats[f.category] = { income: 0, expense: 0 };
@@ -845,7 +861,16 @@ document.getElementById('finForm').addEventListener('submit', e => {
   const amount = parseFloat(document.getElementById('finAmount').value); if (!amount || amount <= 0) return;
   const dateVal = document.getElementById('finDate').value;
   const timestamp = dateVal ? new Date(dateVal + 'T12:00:00').getTime() : Date.now();
-  finance.push({ id: timestamp, type: document.getElementById('finType').value, amount, category: document.getElementById('finCategory').value.trim() || 'Другое', note: document.getElementById('finNote').value.trim() });
+  
+  finance.push({ 
+    id: Date.now() + Math.random(), 
+    date: timestamp, 
+    type: document.getElementById('finType').value, 
+    amount, 
+    category: document.getElementById('finCategory').value.trim() || 'Другое', 
+    note: document.getElementById('finNote').value.trim() 
+  });
+  
   save('finance', finance);
   document.getElementById('finAmount').value = ''; document.getElementById('finNote').value = ''; document.getElementById('finCategory').value = '';
   currentFinDate = new Date(timestamp); renderFinance();
@@ -854,8 +879,8 @@ document.getElementById('finForm').addEventListener('submit', e => {
 document.getElementById('exportBtn').addEventListener('click', () => {
   if (!finance.length) return alert('Нет данных.');
   let csv = 'Дата;Тип;Категория;Сумма;Комментарий\n';
-  finance.sort((a, b) => a.id - b.id).forEach(f => {
-    const d = new Date(f.id);
+  finance.sort((a, b) => a.date - b.date).forEach(f => {
+    const d = new Date(f.date);
     const dateStr = String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
     csv += `${dateStr};${f.type === 'income' ? 'Доход' : 'Расход'};${f.category.replace(/;/g, ',')};${f.type === 'income' ? f.amount : -f.amount};${(f.note || '').replace(/;/g, ',').replace(/\n/g, ' ')}\n`;
   });
